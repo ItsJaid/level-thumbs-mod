@@ -233,15 +233,11 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
             }
         }
 
+        std::vector<globed::ProgressArrow*> progressArrows;
         for (auto child : playLayer->getChildrenExt()) {
-            if (typeinfo_cast<globed::ProgressArrow*>(child)){
-                FLAlertLayer::create(
-                    "Screenshot Error",
-                    "You are trying to take a screenshot <cy>with Globed player icons.</c>!\n"
-                    "Please <cj>disconnect</c> from the <co>Globed server</c> you are currently connected to and try again.",
-                    "OK"
-                )->show();
-                return;
+            if (auto arrow = typeinfo_cast<globed::ProgressArrow*>(child)) {
+                progressArrows.push_back(arrow);
+                arrow->setScale(0.f);
             }
         }
 
@@ -424,6 +420,10 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
 
         if (!aspectMatches && oldUILayerPos) {
             playLayer->m_uiTriggerUI->setPosition(*oldUILayerPos);
+        }
+
+        for (auto arrow : progressArrows) {
+            arrow->setScale(1.f);
         }
 
         if (!data) {
