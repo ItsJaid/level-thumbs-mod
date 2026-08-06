@@ -339,11 +339,13 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
             auto newWinSize = CCDirector::get()->getWinSize();
             aspectMatches = sizesMatch(oldWinSize, newWinSize);
 
+            static constexpr auto MIN_DELTA = std::numeric_limits<float>::min();
+
             if (!aspectMatches) {
                 playLayer->m_calculateTargetHeightOffset = true;
                 playLayer->m_updateGroundShadows = true;
 
-                playLayer->updateCamera(0.f);
+                playLayer->updateCamera(MIN_DELTA);
 
                 // ui trigger layer
                 if (auto uiTriggerLayer = playLayer->m_uiTriggerUI) {
@@ -367,10 +369,18 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
                     shader->m_sprite->getTexture()->setTexParameters(&a);
                 }
                 shader->prePixelateShader();
-                playLayer->updateShaderLayer(0.f);
+                playLayer->updateShaderLayer(MIN_DELTA);
             }
 
-            if (!aspectMatches) playLayer->preUpdateVisibility(0.f);
+            if (!aspectMatches) {
+                auto& areaEffects = playLayer->m_gameState.m_unsortedAreaEffects;
+                areaEffects.insert(static_cast<int>(GJAreaActionType::Fade));
+                areaEffects.insert(static_cast<int>(GJAreaActionType::Tint));
+
+                playLayer->m_gameState.m_commandIndex++;
+                playLayer->updateVisibility(0.f);
+                playLayer->m_gameState.m_commandIndex--;
+            }
             playLayer->visit();
 
             if (!aspectMatches) {
