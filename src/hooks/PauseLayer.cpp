@@ -342,8 +342,21 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
             static constexpr auto MIN_DELTA = std::numeric_limits<float>::min();
 
             if (!aspectMatches) {
+                playLayer->setContentSize(newWinSize);
+
+                // ground fixes
                 playLayer->m_calculateTargetHeightOffset = true;
                 playLayer->m_updateGroundShadows = true;
+                playLayer->m_groundLayer->updateGroundWidth(true);
+                playLayer->m_groundLayer2->updateGroundWidth(true);
+                auto g01 = playLayer->m_effectManager->activeColorForIndex(1001);
+                playLayer->m_groundLayer->updateGround01Color(g01);
+                playLayer->m_groundLayer2->updateGround01Color(g01);
+                if (playLayer->m_groundLayer->m_ground2Sprite) {
+                    auto g02 = playLayer->m_effectManager->activeColorForIndex(1009);
+                    playLayer->m_groundLayer2->updateGround02Color(g02);
+                    playLayer->m_groundLayer2->updateGround02Color(g02);
+                }
 
                 playLayer->updateCamera(MIN_DELTA);
 
@@ -384,9 +397,13 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
             playLayer->visit();
 
             if (!aspectMatches) {
-                // mark as dirty again
+                // restore ground
                 playLayer->m_updateGroundShadows = true;
                 playLayer->m_calculateTargetHeightOffset = true;
+                playLayer->m_groundLayer->updateGroundWidth(true);
+                playLayer->m_groundLayer2->updateGroundWidth(true);
+
+                playLayer->setContentSize(newWinSize);
             }
 
             data = rt.getData();
