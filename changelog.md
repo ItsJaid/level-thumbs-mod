@@ -1,3 +1,9 @@
+# v2.5.1
+- Fixed enter/exit effects bug
+- Fixed ground line bug
+- Mostly fixed "y-axis" bug
+- Resolved compatibility with Globed in platformer mode
+
 # v2.5.0
 - Added a popup when the level already has pending thumbnails.
 - Fixed gradient triggers turning the image transparent.
