@@ -6,7 +6,7 @@ struct HideNode {
 
     HideNode(CCNode* parent, std::string_view id) {
         if (parent) {
-            node = parent->getChildByID(id);
+            node = parent->getChildByIDRecursive(id);
             if (node) {
                 wasVisible = node->isVisible();
                 node->setVisible(false);

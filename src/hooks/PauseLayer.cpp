@@ -280,6 +280,9 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
             if (typeinfo_cast<ExplodeItemNode*>(obj)) {
                 hideNodes.emplace_back(obj);
             }
+            if (obj->getTag() == 234562345) {
+                hideNodes.emplace_back(obj);
+            }
         }
 
         // mods
@@ -291,7 +294,7 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
         HIDE_NODE(playLayer, "zilko.xdbot/recording-audio-label");
         HIDE_NODE(playLayer, "zilko.xdbot/button-menu");
         HIDE_NODE(playLayer, "dankmeme.globed2/game-overlay");
-        HIDE_NODE(playLayer->m_objectLayer, "dankmeme.globed2/player-node");
+        HIDE_NODE(playLayer, "dankmeme.globed2/player-node");
         HIDE_NODE(playLayer, "tobyadd.gdh/labels_top_left");
         HIDE_NODE(playLayer, "tobyadd.gdh/labels_top_right");
         HIDE_NODE(playLayer, "tobyadd.gdh/labels_bottom_left");
@@ -299,8 +302,8 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
         HIDE_NODE(playLayer, "tobyadd.gdh/labels_bottom");
         HIDE_NODE(playLayer, "tobyadd.gdh/labels_top");
         HIDE_NODE(playLayer, "thesillydoggo.qolmod/noclip-tint-overlay");
-        HIDE_NODE(playLayer->m_objectLayer, "zilko.editor_trail_in_game/drawy-node");
-        HIDE_NODE(playLayer->m_objectLayer, "kevadroz.practicecheckpointpermanence/permanent-checkpoints");
+        HIDE_NODE(playLayer, "zilko.editor_trail_in_game/drawy-node");
+        HIDE_NODE(playLayer, "kevadroz.practicecheckpointpermanence/permanent-checkpoints");
         auto aboveShaderNode = playLayer->m_shaderLayer->getParent();
         HIDE_NODE(aboveShaderNode, "eclipse.eclipse-menu/hitboxes");
         HIDE_NODE(aboveShaderNode, "eclipse.eclipse-menu/show-trajectory-draw-node");
