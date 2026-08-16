@@ -393,7 +393,8 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
                 playLayer->updateVisibility(0.f);
                 playLayer->m_gameState.m_commandIndex--;
             }
-            playLayer->visit();
+
+            manualVisit(playLayer);
 
             if (!aspectMatches) {
                 // restore ground
@@ -448,5 +449,75 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
         }
 
         ThumbnailPopup::create(levelID, string::pathToString(saveDir), notes::buildSubmissionNote())->show();
+    }
+
+    // idea by undefined06855 from rewind mod, modified by me to handle camera rotation
+    // original: https://github.com/undefined06855/Rewind/blob/587239d92d6b19f4649656b266a2496fb3a5b4a8/src/hooks/GJBaseGameLayer.cpp#L133
+    static void manualVisit(PlayLayer* playLayer) {
+        auto winSize = CCDirector::get()->getWinSize();
+        CCPoint center = winSize * 0.5f;
+        float cameraAngle = playLayer->m_gameState.m_cameraAngle;
+
+        auto bg = playLayer->m_background;
+        CCRect origRect = bg->getTextureRect();
+        CCPoint origPos = bg->getPosition();
+        bool origFlipY = bg->isFlipY();
+
+        float extraWidth = std::max(winSize.width, winSize.height) * 1.5f;
+        float scale = bg->getScale();
+
+        CCRect paddedRect = origRect;
+        paddedRect.origin.x -= extraWidth / scale;
+        paddedRect.size.width += extraWidth * 2.f / scale;
+
+        bg->setTextureRect(paddedRect);
+
+        std::array<CCNode*, 8> nodes = {
+            playLayer->m_objectParent,
+            playLayer->m_inShaderParent,
+            playLayer->m_shaderLayer,
+            playLayer->m_aboveShaderParent,
+            playLayer->m_objectLayer,
+            playLayer->m_inShaderObjectLayer,
+            playLayer->m_aboveShaderObjectLayer,
+            playLayer->m_uiTriggerUI
+        };
+
+        std::ranges::sort(nodes, [](CCNode* left, CCNode* right) {
+            if (!left || !right) return left != nullptr;
+            return left->getZOrder() < right->getZOrder();
+        });
+
+        kmGLPushMatrix();
+        kmGLTranslatef(0.f, winSize.height, 0.f);
+        kmGLScalef(1.f, -1.f, 1.f); // flip y-axis because opengl
+
+        if (cameraAngle != 0.0f) {
+            kmGLTranslatef(center.x, center.y, 0.f);
+            kmGLRotatef(-cameraAngle, 0.f, 0.f, 1.f);
+            kmGLTranslatef(-center.x, -center.y, 0.f);
+
+            // background has a flipped version below the original to cover the black area.
+            // all of this is an approximation, but it looks close enough to the original imo.
+            // note: see Dash at 23-25% which shows this effect very clearly.
+            float groundTopY = playLayer->m_groundLayer ? playLayer->m_groundLayer->getPositionY() : 0.0f;
+            if (origPos.y > groundTopY) {
+                bg->setFlipY(!origFlipY);
+                bg->setPosition({ origPos.x, origPos.y - bg->getScaledContentHeight() });
+                bg->visit();
+                bg->setFlipY(origFlipY);
+                bg->setPosition(origPos);
+            }
+        }
+
+        for (auto* node : nodes) {
+            if (!node || node->getParent() != playLayer) continue;
+            node->visit();
+        }
+
+        kmGLPopMatrix();
+
+        bg->setTextureRect(origRect);
+        bg->setPosition(origPos);
     }
 };
