@@ -1,5 +1,6 @@
 #include <Geode/modify/PauseLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
 
 #include "../layers/ThumbnailPopup.hpp"
 #include "../managers/SettingsManager.hpp"
@@ -77,6 +78,31 @@ class $modify(LTPlayLayer, PlayLayer) {
             m_fields->lastDeathTick.reset();
         }
         PlayLayer::destroyPlayer(player, object);
+    }
+};
+
+static Hook* s_visitHook = nullptr;
+static FunctionRef<void()> s_visitCallback = []{};
+
+class $modify(LTBaseGameLayer, GJBaseGameLayer) {
+    static void onModify(auto& self) {
+        s_visitHook = self.getHook("GJBaseGameLayer::visitWithColorFlash").unwrap();
+        s_visitHook->setAutoEnable(false);
+    }
+
+    $override void visitWithColorFlash() { s_visitCallback(); }
+
+    static void runCustomVisit(GJBaseGameLayer* self, FunctionRef<void()> callback) {
+        s_visitCallback = callback;
+
+        bool flashVisibleOrig = self->m_flashNode->isVisible();
+        self->m_flashNode->setVisible(true);
+
+        (void) s_visitHook->enable();
+        self->visit();
+        (void) s_visitHook->disable();
+
+        self->m_flashNode->setVisible(flashVisibleOrig);
     }
 };
 
@@ -451,27 +477,9 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
         ThumbnailPopup::create(levelID, string::pathToString(saveDir), notes::buildSubmissionNote())->show();
     }
 
-    // idea by undefined06855 from rewind mod, modified by me to handle camera rotation
-    // original: https://github.com/undefined06855/Rewind/blob/587239d92d6b19f4649656b266a2496fb3a5b4a8/src/hooks/GJBaseGameLayer.cpp#L133
+    // idea by undefined06855 from rewind mod
+    // original: https://github.com/undefined06855/Rewind/blob/0281e11b2c1c35c878786c5a6ce46c3961a71214/src/hooks/GJBaseGameLayer.cpp#L150
     static void manualVisit(PlayLayer* playLayer) {
-        auto winSize = CCDirector::get()->getWinSize();
-        CCPoint center = winSize * 0.5f;
-        float cameraAngle = playLayer->m_gameState.m_cameraAngle;
-
-        auto bg = playLayer->m_background;
-        CCRect origRect = bg->getTextureRect();
-        CCPoint origPos = bg->getPosition();
-        bool origFlipY = bg->isFlipY();
-
-        float extraWidth = std::max(winSize.width, winSize.height) * 1.5f;
-        float scale = bg->getScale();
-
-        CCRect paddedRect = origRect;
-        paddedRect.origin.x -= extraWidth / scale;
-        paddedRect.size.width += extraWidth * 2.f / scale;
-
-        bg->setTextureRect(paddedRect);
-
         std::array<CCNode*, 8> nodes = {
             playLayer->m_objectParent,
             playLayer->m_inShaderParent,
@@ -488,36 +496,19 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
             return left->getZOrder() < right->getZOrder();
         });
 
+        auto winSize = CCDirector::get()->getWinSize();
+
         kmGLPushMatrix();
         kmGLTranslatef(0.f, winSize.height, 0.f);
         kmGLScalef(1.f, -1.f, 1.f); // flip y-axis because opengl
 
-        if (cameraAngle != 0.0f) {
-            kmGLTranslatef(center.x, center.y, 0.f);
-            kmGLRotatef(-cameraAngle, 0.f, 0.f, 1.f);
-            kmGLTranslatef(-center.x, -center.y, 0.f);
-
-            // background has a flipped version below the original to cover the black area.
-            // all of this is an approximation, but it looks close enough to the original imo.
-            // note: see Dash at 23-25% which shows this effect very clearly.
-            float groundTopY = playLayer->m_groundLayer ? playLayer->m_groundLayer->getPositionY() : 0.0f;
-            if (origPos.y > groundTopY) {
-                bg->setFlipY(!origFlipY);
-                bg->setPosition({ origPos.x, origPos.y - bg->getScaledContentHeight() });
-                bg->visit();
-                bg->setFlipY(origFlipY);
-                bg->setPosition(origPos);
+        LTBaseGameLayer::runCustomVisit(playLayer, [&] {
+            for (auto* node : nodes) {
+                if (!node || node->getParent() != playLayer) continue;
+                node->visit();
             }
-        }
-
-        for (auto* node : nodes) {
-            if (!node || node->getParent() != playLayer) continue;
-            node->visit();
-        }
+        });
 
         kmGLPopMatrix();
-
-        bg->setTextureRect(origRect);
-        bg->setPosition(origPos);
     }
 };
