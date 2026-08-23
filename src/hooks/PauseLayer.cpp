@@ -4,6 +4,7 @@
 
 #include "../layers/ThumbnailPopup.hpp"
 #include "../managers/SettingsManager.hpp"
+#include "../utils/EclipseCompat.hpp"
 #include "../utils/ModNodeCompat.hpp"
 #include "../utils/NodeHider.hpp"
 #include "../utils/RenderTexture.hpp"
@@ -211,6 +212,16 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
 
         auto playLayer = PlayLayer::get();
         if (!playLayer) {
+            return;
+        }
+
+        auto eclipse = compat::getEclipse();
+        if (eclipse.isErr()) {
+            FLAlertLayer::create(
+                "Screenshot Error",
+                std::move(eclipse).unwrapErr(),
+                "OK"
+            )->show();
             return;
         }
 
