@@ -477,6 +477,19 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
         ThumbnailPopup::create(levelID, string::pathToString(saveDir), notes::buildSubmissionNote())->show();
     }
 
+    static void GLScalef(float x, float y, float z) {
+    #ifdef GEODE_IS_IOS
+        kmMat4 mat{};
+        mat.mat[0] = x;
+        mat.mat[5] = y;
+        mat.mat[10] = z;
+        mat.mat[15] = 1.f;
+        kmGLMultMatrix(&mat);
+    #else
+        kmGLScalef(x, y, z);
+    #endif
+    }
+
     // idea by undefined06855 from rewind mod
     // original: https://github.com/undefined06855/Rewind/blob/0281e11b2c1c35c878786c5a6ce46c3961a71214/src/hooks/GJBaseGameLayer.cpp#L150
     static void manualVisit(PlayLayer* playLayer) {
@@ -500,7 +513,7 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
 
         kmGLPushMatrix();
         kmGLTranslatef(0.f, winSize.height, 0.f);
-        kmGLScalef(1.f, -1.f, 1.f); // flip y-axis because opengl
+        GLScalef(1.f, -1.f, 1.f); // flip y-axis because opengl
 
         LTBaseGameLayer::runCustomVisit(playLayer, [&] {
             for (auto* node : nodes) {
