@@ -173,6 +173,15 @@ void ThumbnailPopup::openDiscordServerPopup(CCObject* sender) {
         );
     }
 }
+
+static std::filesystem::path strToPath(std::string_view str) {
+#ifdef GEODE_IS_WINDOWS
+    return string::utf8ToWide(str);
+#else
+    return std::filesystem::path(str);
+#endif
+}
+
 void ThumbnailPopup::runSubmissionLogic() {
     if (m_isReplacement && m_extraNote.empty() && !AuthManager::get().roleIsEqualOrAbove(ThumbnailRole::MODERATOR)) {
         FLAlertLayer::create(nullptr,"Error!","<cr>You must add a </c><cy>submission note</c><cr> when submitting a replacement!</c>","OK",nullptr,400)->show();
@@ -185,7 +194,7 @@ void ThumbnailPopup::runSubmissionLogic() {
     load->show();
     m_uploadListener.spawn(
         AuthManager::get().uploadThumbnail(
-            m_previewFileName, m_levelID, fmt::format("{}m={}", m_submissionNote, noteEncodeBuffer.str()),
+            strToPath(m_previewFileName), m_levelID, fmt::format("{}m={}", m_submissionNote, noteEncodeBuffer.str()),
             [load](ZStringView progress) {
                 queueInMainThread([load, progress] {
                     load->changeStatus(progress.c_str());

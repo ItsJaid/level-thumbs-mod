@@ -51,7 +51,7 @@ constexpr std::array THUMBNAIL_ROLES = {
     }
 };
 
-static geode::utils::StringMap<ThumbnailRole> THUMBNAIL_ROLE_SERVER_NAMES = {
+inline static geode::utils::StringMap<ThumbnailRole> THUMBNAIL_ROLE_SERVER_NAMES = {
     {"user", ThumbnailRole::USER},
     {"verified", ThumbnailRole::VERIFIED},
     {"moderator", ThumbnailRole::MODERATOR},
@@ -59,21 +59,8 @@ static geode::utils::StringMap<ThumbnailRole> THUMBNAIL_ROLE_SERVER_NAMES = {
     {"owner", ThumbnailRole::OWNER}
 };
 
-inline ThumbnailRole getRoleByName(std::string_view role) {
-    auto it = THUMBNAIL_ROLE_SERVER_NAMES.find(role);
-    if (it != THUMBNAIL_ROLE_SERVER_NAMES.end()) {
-        return it->second;
-    }
-    return ThumbnailRole::NONE;
-}
-
-inline std::optional<ThumbnailRoleInfo> getRoleInfoByName(std::string_view role) {
-    auto r = getRoleByName(role);
-    if (r == ThumbnailRole::NONE) {
-        return std::nullopt;
-    }
-    return THUMBNAIL_ROLES[static_cast<size_t>(r) - 1];
-}
+ThumbnailRole getRoleByName(std::string_view role);
+std::optional<ThumbnailRoleInfo> getRoleInfoByName(std::string_view role);
 
 class AuthManager {
 private:
@@ -101,7 +88,7 @@ public:
     static std::string getToken();
 
     LoginFuture login();
-    UploadFuture uploadThumbnail(std::string_view filename, int levelID, std::string note, geode::Function<void(geode::ZStringView)> onProgress = nullptr);
+    UploadFuture uploadThumbnail(std::filesystem::path filename, int levelID, std::string note, geode::Function<void(geode::ZStringView)> onProgress = nullptr);
     LinkFuture linkAccount(std::string linkSecret);
 
     void initialSync();

@@ -16,60 +16,120 @@ bool AuthManager::isLoggedIn() {
     return Mod::get()->hasSavedValue("token");
 }
 
+ThumbnailRole getRoleByName(std::string_view role) {
+    auto it = THUMBNAIL_ROLE_SERVER_NAMES.find(role);
+    if (it != THUMBNAIL_ROLE_SERVER_NAMES.end()) {
+        return it->second;
+    }
+    return ThumbnailRole::NONE;
+}
+
+std::optional<ThumbnailRoleInfo> getRoleInfoByName(std::string_view role) {
+    auto r = getRoleByName(role);
+    if (r == ThumbnailRole::NONE) {
+        return std::nullopt;
+    }
+    return THUMBNAIL_ROLES[static_cast<size_t>(r) - 1];
+}
+
 AuthManager& AuthManager::get() {
     static AuthManager instance;
     return instance;
 }
 
-AuthManager::UploadFuture AuthManager::uploadThumbnail(std::string_view filename, int levelID, std::string note, Function<void(ZStringView)> onProgress) {
+static std::string getErrorMessage(web::WebResponse const& res) {
+    if (auto jsonRes = res.json()) {
+        auto json = std::move(jsonRes).unwrap();
+
+        std::string message;
+        if (json["reason"].isString()) {
+            message = json["reason"].asString().unwrap();
+        } else if (json["message"].isString()) {
+            message = json["message"].asString().unwrap();
+        }
+
+        std::string details;
+        if (json["details"].isString()) {
+            details = json["details"].asString().unwrap();
+        }
+
+        if (!message.empty()) {
+            if (!details.empty()) {
+                return fmt::format("{}: <co>{}</c>", message, details);
+            }
+            return message;
+        }
+    }
+
+    StringBuffer<> buf("HTTP ");
+    buf.append("<cy>{}</c>", res.code());
+
+    auto str = res.string().unwrapOrDefault();
+    if (!str.empty()) {
+        buf.append(": <cj>{}</c>", str);
+    }
+
+    if (!res.errorMessage().empty()) {
+        buf.append(" (<cr>{}</c>)", res.errorMessage());
+    }
+
+    return buf.str();
+}
+
+AuthManager::UploadFuture AuthManager::uploadThumbnail(std::filesystem::path filename, int levelID, std::string note, Function<void(ZStringView)> onProgress) {
     if (onProgress) onProgress("Logging in...");
 
     if (!this->isLoggedIn()) {
-        auto loginRes = co_await this->login();
-        if (!loginRes) {
-            co_return Err(std::move(loginRes).unwrapErr());
-        }
+        GEODE_CO_UNWRAP(co_await this->login());
     }
 
     if (onProgress) onProgress("Uploading...");
 
-    auto readRes = file::readBinary(filename);
-    if (!readRes) {
-        co_return Err(std::move(readRes).unwrapErr());
-    }
+    GEODE_CO_UNWRAP_INTO(auto readRes, file::readBinary(filename));
 
     auto res = co_await web::WebRequest()
         .header("Authorization", fmt::format("Bearer {}", Mod::get()->getSavedValue<std::string>("token")))
         .header("X-Submission-Note", std::move(note))
-        .body(std::move(readRes).unwrap())
+        .body(std::move(readRes))
         .userAgent(USER_AGENT)
         .post(fmt::format("{}/upload/{}", Settings::thumbnailAPIBaseURL(), levelID));
 
     auto code = res.code();
 
     if (code == 201 || code == 200) {
-        co_return Ok("The thumbnail has been applied.");
-    } else if (code == 202) {
-        co_return Ok("The thumbnail has been submitted, and is now in the queue for approval.");
+        co_return Ok("The thumbnail has been <cg>applied</c>.");
     }
 
-    if (code == 401 || code == 498) Mod::get()->getSaveContainer().erase("token");
-    else if (code == 423) {
-        auto reason_res = res.json().unwrapOrDefault()["reason"].asString();
-        if (reason_res) {
-            co_return Err(fmt::format(
-            "Submissions are currently locked for this level.\n<cy>Reason: {}</c>",
-                res.json().unwrapOrDefault()["reason"].asString().unwrapOr("auth error")
-            ));
-        } else {
-            co_return Err("Submissions are currently locked for this level.");
-        }
+    if (code == 202) {
+        co_return Ok("The thumbnail has been <co>submitted</c>, and is now <cj>in the queue</c> for approval.");
     }
-    log::error("{}", res.string().unwrapOrDefault());
-    co_return Err(fmt::format(
-        "<cr>Thumbnail upload failed: {}</c>",
-        res.json().unwrapOrDefault()["message"].asString().unwrapOr("auth error")
-    ));
+
+    if (code == 401 || code == 498) {
+        Mod::get()->getSaveContainer().erase("token");
+    }
+
+    auto err = getErrorMessage(res);
+
+    switch (code) {
+        case 400: co_return Err("<cr>{}</c>", err); // bad request: invalid image, broken notes
+        case 423: { // locked
+            if (auto reasonRes = res.json().unwrapOrDefault()["reason"].asString()) {
+                co_return Err(
+                    "Submissions are currently <cr>locked</c> for this level.\nReason: <cy>{}</c>",
+                    reasonRes.unwrap()
+                );
+            }
+            co_return Err("Submissions are currently <cr>locked</c> for this level.");
+        }
+        case 403: [[fallthrough]]; // forbidden: user banned
+        case 426: [[fallthrough]]; // upgrade required: mod/gd outdated
+        case 429: [[fallthrough]]; // too many requests: ran out of energy
+        case 503: co_return Err(std::move(err)); // service unavailable: server down
+        default: break;
+    }
+
+    log::error("Upload failed (HTTP {}): {}", code, res.string().unwrapOrDefault());
+    co_return Err("Thumbnail upload <cr>failed</c>: {}", err);
 }
 
 AuthManager::LinkFuture AuthManager::linkAccount(std::string linkSecret) {
@@ -90,14 +150,12 @@ AuthManager::LinkFuture AuthManager::linkAccount(std::string linkSecret) {
         Mod::get()->setSavedValue<std::string>(
             "token", res.json().unwrapOrDefault()["token"].asString().unwrapOrDefault()
         );
-        co_return Ok("Your account was linked successfully.");
+        co_return Ok("Your account was linked <cg>successfully</c>!");
     }
 
-    log::error("Account link failed: {}", res.string().unwrapOrDefault());
-    co_return Err(fmt::format(
-        "Account link failed: {}",
-        res.json().unwrapOrDefault()["message"].asString().unwrapOr("auth error")
-    ));
+    auto err = getErrorMessage(res);
+    log::error("Account link failed (HTTP {}): {}", res.code(), res.string().unwrapOrDefault());
+    co_return Err(fmt::format("Account link <cr>failed</c>: {}", err));
 }
 
 void AuthManager::initialSync() {
@@ -129,7 +187,7 @@ void AuthManager::initialSync() {
             .get(fmt::format("{}/auth/session", Settings::thumbnailAPIBaseURL())),
         [this](web::WebResponse res) {
             if (!res.ok()) {
-                log::error("Session check failed: {}", res.string().unwrapOrDefault());
+                log::error("Session check failed: {}", getErrorMessage(res));
                 m_myRole = getRoleByName(Mod::get()->getSavedValue<std::string>("cached_role"));
                 return;
             }
@@ -166,7 +224,7 @@ AuthManager::BadgeFuture AuthManager::fetchBadgeForAccount(int accountID) {
 
     if (!res.ok()) {
         log::error("Badge fetch failed: {}", res.string().unwrapOrDefault());
-        co_return Err("badge fetch failed");
+        co_return Err(getErrorMessage(res));
     }
 
     auto role = res.json().unwrapOrDefault()["data"]["role"].asString().unwrapOrDefault();
@@ -178,7 +236,7 @@ AuthManager::BadgeFuture AuthManager::fetchBadgeForAccount(int accountID) {
 
 AuthManager::LoginFuture AuthManager::login() {
     if (GJAccountManager::get()->m_accountID == 0) {
-        co_return Err("not logged into an account");
+        co_return Err("Not logged into Geometry Dash account!");
     }
 
     auto data = co_await async::waitForMainThread<argon::AccountData>([] {
@@ -186,12 +244,12 @@ AuthManager::LoginFuture AuthManager::login() {
     });
 
     if (!data->valid()) {
-        co_return Err("argon - invalid game data");
+        co_return Err("Argon authentication failed: <cr>invalid game data</r>");
     }
 
     auto argonRes = co_await argon::startAuth(data.value());
     if (!argonRes) {
-        co_return Err(std::move(argonRes).unwrapErr());
+        co_return Err(fmt::format("Argon auth error: {}", argonRes.unwrapErr()));
     }
 
     auto accID = GJAccountManager::get()->m_accountID;
@@ -210,15 +268,15 @@ AuthManager::LoginFuture AuthManager::login() {
         .post(fmt::format("{}/auth/login", Settings::thumbnailAPIBaseURL()));
 
     if (!res.ok()) {
-        log::error("Login request failed: {}", res.errorMessage());
-        co_return Err("login request failed");
+        log::error("Login request failed: {}", res.string().unwrapOrDefault());
+        co_return Err(getErrorMessage(res));
     }
 
     Mod::get()->setSavedValue<std::string>(
         "token", res.json().unwrapOrDefault()["token"].asString().unwrapOrDefault()
     );
 
-    co_return Ok("success!");
+    co_return Ok("Logged in <cg>successfully</c>!");
 }
 
 std::string AuthManager::getToken() {
