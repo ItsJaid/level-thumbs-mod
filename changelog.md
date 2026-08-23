@@ -1,3 +1,11 @@
+# v2.6.0
+- Greatly improve compatibility with any overlay mods (both existing and future ones).
+- Improved error messages when submitting thumbnails.
+- Made messages about "Low Detail Mode" more clear.
+- Added integration with Eclipse Menu to check for infringing hacks (and auto disable some of them).
+- Implemented a way to block taking thumbnails when certain mods are detected dynamically.
+- Added a check for GDPS submissions.
+
 # v2.5.1
 - Fixed enter/exit effects bug
 - Fixed ground line bug

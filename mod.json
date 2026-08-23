@@ -6,14 +6,14 @@
         "mac": "2.2081",
         "ios": "2.2081"
     },
-    "version": "v2.5.1",
+    "version": "v2.6.0",
     "id": "cdc.level_thumbnails",
     "name": "Level Thumbnails",
     "developer": "cdc",
     "links": {
         "homepage": "https://levelthumbs.prevter.me",
         "community": "https://discord.gg/GuagJDsqds",
-        "source": "https://github.com/cdc-sys/level-thumbs-mod"
+        "source": "https://github.com/Level-Thumbnails/level-thumbs-mod"
     },
     "description": "Adds thumbnails to levels in search.",
     "resources": {
