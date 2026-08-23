@@ -210,6 +210,16 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
             return;
         }
 
+        auto compats = AuthManager::get().validateModCompats();
+        if (!compats) {
+            MDPopup::create(
+                "Screenshot Error",
+                std::move(compats).unwrapErr(),
+                "OK"
+            )->show();
+            return;
+        }
+
         auto playLayer = PlayLayer::get();
         if (!playLayer) {
             return;

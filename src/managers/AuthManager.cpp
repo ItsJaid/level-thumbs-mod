@@ -83,6 +83,20 @@ AuthManager::UploadFuture AuthManager::uploadThumbnail(std::filesystem::path fil
         GEODE_CO_UNWRAP(co_await this->login());
     }
 
+    if (m_serverMetadata.has_value()) {
+        auto data = co_await async::waitForMainThread<argon::AccountData>([] {
+            return argon::getGameAccountData();
+        });
+
+        if (!data->valid()) {
+            co_return Err("Invalid account data");
+        }
+
+        if (data->serverUrl != m_serverMetadata->gdBaseUrl) {
+            co_return Err("Incompatible Geometry Dash server URL: <cr>{}</c> (expected <cy>{}</c>)", data->serverUrl, m_serverMetadata->gdBaseUrl);
+        }
+    }
+
     if (onProgress) onProgress("Uploading...");
 
     GEODE_CO_UNWRAP_INTO(auto readRes, file::readBinary(filename));
@@ -199,6 +213,31 @@ void AuthManager::initialSync() {
             Mod::get()->setSavedValue<std::string>("cached_role", role);
         }
     );
+
+    async::spawn(
+        web::WebRequest()
+            .userAgent(USER_AGENT)
+            .get(fmt::format("{}/metadata", Settings::thumbnailAPIBaseURL())),
+        [this](web::WebResponse res) {
+            if (!res.ok()) {
+                log::error("Metadata fetch failed: {}", getErrorMessage(res));
+                return;
+            }
+
+            auto jsonRes = res.json();
+            if (!jsonRes) return;
+
+            auto json = std::move(jsonRes).unwrap();
+            auto const& data = json["data"];
+
+            m_serverMetadata = ServerMetadata{
+                .gdBaseUrl = data["gd_base"].asString().unwrapOrDefault(),
+                .argonBaseUrl = data["argon_host"].asString().unwrapOrDefault(),
+                .bannedMods = data["banned_mods"].as<std::vector<std::string>>().unwrapOrDefault(),
+                .bannedSettings = data["banned_settings"].as<StringMap<std::vector<std::string>>>().unwrapOrDefault()
+            };
+        }
+    );
 }
 
 void AuthManager::purgeBadgeForAccount(int accountID) {
@@ -234,6 +273,55 @@ AuthManager::BadgeFuture AuthManager::fetchBadgeForAccount(int accountID) {
     co_return Ok(role_enum);
 }
 
+Result<> AuthManager::validateModCompats() const {
+    if (!m_serverMetadata.has_value()) {
+        return Ok();
+    }
+
+    // check for banned mods
+    {
+        StringBuffer<> buf("Thumbnails <cr>can not be taken</c> due to the following mods being enabled:\n");
+
+        bool hasBannedMods = false;
+        for (auto const& modID : m_serverMetadata->bannedMods) {
+            if (Loader::get()->isModLoaded(modID)) {
+                buf.append("\n<mod:{}>\n", modID);
+                hasBannedMods = true;
+            }
+        }
+
+        if (hasBannedMods) {
+            return Err(buf.str());
+        }
+    }
+
+    // check for banned settings
+    {
+        StringBuffer<> buf("Thumbnails <cr>can not be taken</c> due to the following settings being enabled:\n");
+
+        bool hasBannedSettings = false;
+        for (auto const& [modID, settings] : m_serverMetadata->bannedSettings) {
+            auto mod = Loader::get()->getLoadedMod(modID);
+            if (!mod) continue;
+
+            for (auto const& setting : settings) {
+                if (mod->getSettingValue<bool>(setting)) {
+                    auto settingInfo = mod->getSetting(setting);
+                    if (!settingInfo) continue;
+                    buf.append("- \"<co>{}</c>\" (<cj>{}</c>)", settingInfo->getDisplayName(), mod->getName());
+                    hasBannedSettings = true;
+                }
+            }
+        }
+
+        if (hasBannedSettings) {
+            return Err(buf.str());
+        }
+    }
+
+    return Ok();
+}
+
 AuthManager::LoginFuture AuthManager::login() {
     if (GJAccountManager::get()->m_accountID == 0) {
         co_return Err("Not logged into Geometry Dash account!");
@@ -245,6 +333,14 @@ AuthManager::LoginFuture AuthManager::login() {
 
     if (!data->valid()) {
         co_return Err("Argon authentication failed: <cr>invalid game data</r>");
+    }
+
+    if (m_serverMetadata.has_value()) {
+        if (data->serverUrl != m_serverMetadata->gdBaseUrl) {
+            co_return Err("Incompatible Geometry Dash server URL: <cr>{}</c> (expected <cy>{}</c>)", data->serverUrl, m_serverMetadata->gdBaseUrl);
+        }
+
+        GEODE_CO_UNWRAP(argon::setServerUrl(m_serverMetadata->argonBaseUrl));
     }
 
     auto argonRes = co_await argon::startAuth(data.value());

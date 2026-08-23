@@ -101,7 +101,17 @@ public:
         return myRole.has_value() && myRole.value() >= role;
     }
 
+    geode::Result<> validateModCompats() const;
+
 private:
+    struct ServerMetadata {
+        std::string gdBaseUrl;
+        std::string argonBaseUrl;
+        std::vector<std::string> bannedMods;
+        geode::utils::StringMap<std::vector<std::string>> bannedSettings;
+    };
+
     std::unordered_map<int, ThumbnailRole> m_badgeCache = {};
     std::optional<ThumbnailRole> m_myRole = std::nullopt;
+    std::optional<ServerMetadata> m_serverMetadata = std::nullopt;
 };

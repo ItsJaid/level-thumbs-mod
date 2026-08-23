@@ -204,9 +204,9 @@ void ThumbnailPopup::runSubmissionLogic() {
         [load](auto res){
             load->fadeOut();
             if (res.isOk()) {
-                FLAlertLayer::create(nullptr, "Success!", res.unwrapOrDefault(), "OK", nullptr, 400)->show();
+                FLAlertLayer::create(nullptr, "Success!", std::move(res).unwrapOrDefault(), "OK", nullptr, 400)->show();
             } else {
-                FLAlertLayer::create(nullptr, "Error!", res.unwrapErr(), "OK", nullptr, 400)->show();
+                FLAlertLayer::create(nullptr, "Error!", std::move(res).unwrapErr(), "OK", nullptr, 400)->show();
             }
         }
     );
