@@ -189,11 +189,21 @@ class $modify(ThumbnailPauseLayer, PauseLayer) {
             return;
         }
 
-        if (GameManager::get()->m_performanceMode || GameManager::get()->getGameVariable(GameVar::LowDetail)) {
+        if (GameManager::get()->m_performanceMode) {
             FLAlertLayer::create(
                 "Screenshot Error",
                 "Thumbnails cannot be taken while <cy>Low Detail Mode</c> is enabled.\n"
-                "Please disable it in the Geometry Dash settings and try again.",
+                "Please disable it (found in Settings > Help) and try again.",
+                "OK"
+            )->show();
+            return;
+        }
+
+        if (GameManager::get()->getGameVariable(GameVar::ExtraLDM)) {
+            FLAlertLayer::create(
+                "Screenshot Error",
+                "Thumbnails cannot be taken while <cy>Extra LDM</c> is enabled.\n"
+                "Please disable it (found in Settings > Options > Performance) and try again.",
                 "OK"
             )->show();
             return;
